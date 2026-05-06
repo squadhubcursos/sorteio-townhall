@@ -1,65 +1,109 @@
-import Image from "next/image";
+'use client';
+import { useState, useEffect } from 'react';
+import { TabId, HistoryEntry } from '@/types';
+import { useHistory } from '@/lib/useHistory';
+import { usePeople } from '@/lib/usePeople';
+import GradientMenu from '@/components/ui/GradientMenu';
+import ConfigView from '@/components/views/ConfigView';
+import SorteioView from '@/components/views/SorteioView';
+import TimerView from '@/components/views/TimerView';
+import HistoricoView from '@/components/views/HistoricoView';
 
 export default function Home() {
+  const { people, loaded, addPerson, removePerson } = usePeople();
+  const [activeTab, setActiveTab] = useState<TabId>('config');
+  const [presence, setPresence] = useState<Record<string, boolean>>({});
+  const [qty, setQty] = useState(5);
+
+  // Sync presence when people list changes (new person added = checked by default)
+  useEffect(() => {
+    if (!loaded) return;
+    setPresence(prev => {
+      const next: Record<string, boolean> = {};
+      people.forEach(p => { next[p] = prev[p] ?? true; });
+      return next;
+    });
+  }, [people, loaded]);
+  const [drawResult, setDrawResult] = useState<string[]>([]);
+  const [sortRunning, setSortRunning] = useState(false);
+  const { history, addEntry, removeEntry, clearAll } = useHistory();
+
+  const presentCount = Object.values(presence).filter(Boolean).length;
+
+  function handlePresenceChange(name: string, value: boolean) {
+    setPresence(prev => ({ ...prev, [name]: value }));
+  }
+
+  function handleQtyChange(v: number) {
+    setQty(Math.min(presentCount, Math.max(1, v)));
+  }
+
+  function handleStart() {
+    setSortRunning(true);
+    setDrawResult([]);
+    setActiveTab('sorteio');
+  }
+
+  function handleDrawComplete(names: string[]) {
+    setSortRunning(false);
+    setDrawResult(names);
+  }
+
+  function handleGoToTimer() {
+    setActiveTab('timer');
+  }
+
+  function handleSessionEnd(names: string[]) {
+    const now = new Date();
+    const date =
+      now.toLocaleDateString('pt-BR') +
+      ' ' +
+      now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const entry: HistoryEntry = { date, names, presentCount };
+    addEntry(entry);
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="min-h-screen">
+      <div className="pt-8 pb-4 px-4 text-center">
+        <h1 className="text-2xl font-extrabold text-white tracking-tight" style={{ fontFamily: 'var(--font-syne)' }}>
+          Sorteio Semanal
+        </h1>
+        <p className="text-xs text-white/40 mt-1">Grandes Entregas da Semana</p>
+      </div>
+
+      <GradientMenu active={activeTab} onChange={setActiveTab} />
+
+      <div className="pb-12">
+        {activeTab === 'config' && (
+          <ConfigView
+            people={people}
+            presence={presence}
+            qty={qty}
+            onPresenceChange={handlePresenceChange}
+            onQtyChange={handleQtyChange}
+            onStart={handleStart}
+            onAddPerson={addPerson}
+            onRemovePerson={removePerson}
+          />
+        )}
+        {activeTab === 'sorteio' && (
+          <SorteioView
+            drawResult={drawResult}
+            running={sortRunning}
+            presence={presence}
+            qty={qty}
+            onDrawComplete={handleDrawComplete}
+            onGoToTimer={handleGoToTimer}
+          />
+        )}
+        {activeTab === 'timer' && (
+          <TimerView drawResult={drawResult} onSessionEnd={handleSessionEnd} />
+        )}
+        {activeTab === 'historico' && (
+          <HistoricoView history={history} onRemove={removeEntry} onClearAll={clearAll} />
+        )}
+      </div>
     </div>
   );
 }
